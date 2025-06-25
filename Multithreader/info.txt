@@ -1,0 +1,24 @@
+    int x = 5;
+    int y = 3;
+    auto add = [x](int a, int b) -> int {
+        return a + b + x;
+    };
+    int result = add(1, 2);
+    //result is 1 + 2 + 5 = 8
+
+
+
+
+    [ capture_clause ] ( parameter_list ) -> return_type {
+    // lambda body
+    }
+    capture_clause: This part specifies what external variables from the surrounding scope the lambda function can access. It can be one of the following:
+
+    [ ]: No capture list, meaning the lambda cannot access any external variables.
+    [var]: Capture a specific variable by value.
+    [&var]: Capture a specific variable by reference.
+    [=]: Capture all external variables by value.
+    [&]: Capture all external variables by reference.
+
+
+
