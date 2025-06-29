@@ -2,7 +2,7 @@
 
 A C-based implementation of a **32-bit ELF executable loader**, written from scratch without using any external ELF-parsing libraries.
 
-> Created as part of an Operating Systems assignment, but cleaned, modularized, and extended to meet bonus requirements like a boss 😤
+> Created as part of an Operating Systems assignment
 
 ---
 
