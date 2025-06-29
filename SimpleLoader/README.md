@@ -48,6 +48,7 @@ make
 Expected Output:
 ```
 User _start return value = 102334155
+(The given value is of fib(40) and can be changed in the fib.c file)
 ```
 
 ---
