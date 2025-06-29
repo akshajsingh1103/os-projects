@@ -13,4 +13,4 @@
 #include <sys/mman.h>
 
 void load_and_run_elf(char** exe);
-void loader_cleanup();
+void loader_cleanup_all();
