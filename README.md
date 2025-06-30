@@ -4,17 +4,17 @@ This repository contains a collection of fundamental operating system component 
 
 ## 📂 Projects Overview
 
-### 1. SimpleScheduler
-Implements a basic **round-robin process scheduler** in C. It simulates process management by scheduling dummy tasks with time slices and context switching behavior. Helps build intuition about CPU scheduling algorithms and process queues.
-
-### 2. Multithreader
-A lightweight **threaded task manager** using **POSIX threads (pthreads)**. Demonstrates creation, synchronization, and management of multiple concurrent threads, along with mutex usage for critical section control.
-
-### 3. SimpleLoader
+### 1. SimpleLoader
 A custom-built **ELF (Executable and Linkable Format) loader** for 32-bit Linux executables. Mimics how an OS loader reads ELF headers, maps sections into memory, and transfers control to the entry point. Great for understanding binary execution at a low level.
 
-### 4. SimpleShell
+### 2. SimpleShell
 A basic command-line **shell interpreter** with support for executing user commands, handling background processes, and built-in commands like `cd` and `exit`. Simulates Unix-like shell behavior using `fork`, `execvp`, and `waitpid`.
+
+### 3. SimpleScheduler
+Implements a basic **round-robin process scheduler** in C. It simulates process management by scheduling dummy tasks with time slices and context switching behavior. Helps build intuition about CPU scheduling algorithms and process queues.
+
+### 4. Multithreader
+A lightweight **threaded task manager** using **POSIX threads (pthreads)**. Demonstrates creation, synchronization, and management of multiple concurrent threads, along with mutex usage for critical section control.
 
 ### 5. SimpleSmartLoader
 A more advanced ELF loader that improves upon `SimpleLoader`, adding smarter handling of segments, permissions, and memory mapping strategies — simulating a real-world dynamic linker more closely.
