@@ -1,4 +1,4 @@
-# 🧠 Operating Systems Mini-Projects
+# 🧠 Operating Systems Projects
 
 This repository contains a collection of fundamental operating system component implementations, developed as part of coursework and independent learning. Each project focuses on simulating real-world OS-level functionalities using C and POSIX APIs, aimed at deepening understanding of process management, memory handling, concurrency, and system-level I/O.
 
