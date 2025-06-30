@@ -1,3 +1,11 @@
-PID      Command          Start Time      Duration:
-
-50806     ls        1694339351.000     0.000    
+PROCESS TERMINATION LOG
+------------------------
+PID: 11808 | CMD: ls | Start: 1751300701 | Duration: 0.00 sec
+PID: 11809 | CMD: wc -l SimpleShell.c | Start: 1751300701 | Duration: 0.00 sec
+PID: 11810 | CMD: cat SimpleShell.c  | Start: 1751300701 | Duration: 0.00 sec
+PID: 11811 | CMD:  grep printf | Start: 1751300701 | Duration: 0.00 sec
+PID: 11812 | CMD: ./fib 10 | Start: 1751300701 | Duration: 0.00 sec
+PID: 11813 | CMD: sleep 3  | Start: 1751300701 | Duration: 0.00 sec
+PID: 11857 | CMD: echo hello world | Start: 1751300715 | Duration: 0.00 sec
+PID: 11858 | CMD: sort SimpleShell.c  | Start: 1751300715 | Duration: 0.00 sec
+PID: 11859 | CMD:  uniq | Start: 1751300715 | Duration: 0.00 sec

@@ -1,333 +1,259 @@
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <unistd.h>
-// #include <sys/wait.h>
-// #include <stdbool.h>
-// #include <time.h>
-// #include <signal.h>
-
-
-#include <string.h>
-#include <signal.h>
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 #include <errno.h>
 #include <time.h>
 #include <signal.h>
 #include <stdbool.h>
 
 #define MAX_INPUT_SIZE 1024
+
 volatile sig_atomic_t is_interrupted = 0;
 
-void exec_command(char *command)
-{   
-
-    pid_t pid=fork();  //fork called. Child and Parent process created
-    int status;
-    // stores the pid, entry time, duration in termination.txt file.
-    time_t start_time;
-    time(&start_time);
-    FILE *termination=fopen("termination.txt", "a");
-    fprintf(termination, "%d     ", (int)pid);
-    fprintf(termination, "%s        ", command);
-    fprintf(termination, "%.3f     ",(double)start_time);
-
-    if (pid < 0)
-    {
-        printf("fork failed\n"); //exits if fork failed
-        exit(1);
+void my_handler(int signum){
+    if (signum == SIGINT) {
+        printf("\n[!] Ctrl+C detected. Terminating shell.\n");
+        FILE* term = fopen("termination.txt", "r");
+        if (term) {
+            char line[MAX_INPUT_SIZE];
+            while (fgets(line, sizeof(line), term)) {
+                printf("%s", line);
+            }
+            fclose(term);
+        }
+        exit(EXIT_SUCCESS);
     }
-    else if (pid == 0)
-    {   
-        //child process called
-        char *args[100];
+}
+
+// Logs command execution stats
+void log_termination(pid_t pid, const char* cmd, time_t start_time, time_t end_time) {
+    FILE* term = fopen("termination.txt", "a");
+    if (!term) return;
+
+    fprintf(term, "PID: %d | CMD: %s | Start: %.0f | Duration: %.2f sec\n",
+        pid, cmd, (double)start_time, difftime(end_time, start_time));
+    fclose(term);
+}
+
+// Executes single command (no pipe or &)
+void exec_command(char* command) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork failed");
+        return;
+    }
+
+    time_t start_time;
+    time_t end_time;
+
+    time(&start_time);  // Parent and child both can use this timestamp
+
+    if (pid == 0) {
+        // CHILD
+        char* args[100];
         int i = 0;
-        char *token = strtok(command, " ");  
-        while (token != NULL)
-        {
-            args[i] = token;
-            i++;
+        char* token = strtok(command, " ");
+        while (token) {
+            args[i++] = token;
             token = strtok(NULL, " ");
         }
         args[i] = NULL;
-        execvp(args[0], args);  // the command is executed
-        perror("there was a failure in execvp");  //exits if exec fails
-        exit(1);
-    }
-    else{
-        //parent process called 
-        do {
-            waitpid(pid, &status, WUNTRACED);   //waits for the child to complete execution and terminate
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        time_t end_time;
+        execvp(args[0], args);
+        perror("execvp failed");
+        exit(EXIT_FAILURE);
+    } else {
+        // PARENT
+        int status;
+        waitpid(pid, &status, 0);
         time(&end_time);
-        double difference = difftime(end_time, start_time);
-        fprintf(termination, "%.3f    \n", (double)difference);
-        fclose(termination);  //closes termination.txt file
+        if (end_time < start_time) end_time = start_time;  // safety
+        log_termination(pid, command, start_time, end_time);
     }
-
 }
 
 
-bool isPiped(char* command)   //checks if a command is piped.
-{
-    if(strchr(command,'|')!= NULL){
-        return true;
-    }
-    else return false;
+bool is_piped(const char* cmd){
+    return strchr(cmd, '|') != NULL;
 }
 
+bool is_background(const char* cmd){
+    return strchr(cmd, '&') != NULL;
+}
 
-void exec_piped(char* command)   //Executes the piped commands 
-{
-    int num_pipes = 0;
-    char *pipes[10]; // max 10 commands can be piped at a time.
+void exec_piped(char* command){
+    char* cmds[10];
+    int n = 0;
 
-    // Tokenize the command string based on pipes
-    char *token = strtok(command, "|");
-    while (token != NULL) {
-        pipes[num_pipes] = token;
-        num_pipes++;
+    char* token = strtok(command, "|");
+    while (token && n < 10) {
+        cmds[n++] = token;
         token = strtok(NULL, "|");
     }
 
-    int prev_pipe_read = -1; // File descriptor for the previous pipe's read end
-    int pipefd[2];           // File descriptors for the current pipe
-
-    for (int i = 0; i < num_pipes; i++) {
-
-        FILE *termination=fopen("termination.txt", "a");
-        if (pipe(pipefd) == -1) {
-            perror("Pipe failure");
-            exit(EXIT_FAILURE);
-        }
-
+    int prev_fd = -1;
+    for (int i = 0; i < n; i++) {
+        int pipefd[2];
+        pipe(pipefd);
         pid_t pid = fork();
-        //time objects for printing during termination
+
         time_t start_time;
-        int status;
+        time_t end_time;
         time(&start_time);
-        fprintf(termination, "%d    ", (int)pid);
-        fprintf(termination,"%s         ",pipes[i]);
-        fprintf(termination, "%3f    ", (double)start_time);
-        
-        
-        if (pid <0) {
-            perror("Fork failure");
-            exit(EXIT_FAILURE);
-        }
 
-        if (pid == 0) { // Child process
-            // Close read end of the pipe
-            close(pipefd[0]);
-
-            // Redirect stdin if it's not the first command
-            if (prev_pipe_read != -1) {
-                dup2(prev_pipe_read, STDIN_FILENO);
-                close(prev_pipe_read);
+        if (pid == 0) {
+            // CHILD
+            if (prev_fd != -1) {
+                dup2(prev_fd, 0);
+                close(prev_fd);
             }
-
-            // Redirect stdout to the current pipe's write end
-            dup2(pipefd[1], STDOUT_FILENO);
+            if (i != n - 1) {
+                dup2(pipefd[1], 1);
+            }
+            close(pipefd[0]);
             close(pipefd[1]);
 
-            // Execute the command
-            char *args[100]; // Adjust the array size as needed
+            char* args[100];
             int j = 0;
-
-            // Tokenize the individual command based on spaces
-            
-            
-            token = strtok(pipes[i], " ");
-            while (token != NULL) {
-                args[j] = token;
-                j++;
-                token = strtok(NULL, " ");
+            char* tok = strtok(cmds[i], " ");
+            while (tok) {
+                args[j++] = tok;
+                tok = strtok(NULL, " ");
             }
             args[j] = NULL;
 
-            
-
             execvp(args[0], args);
-            perror("execvp"); // Handle error if execvp fails
+            perror("execvp failed in pipe");
             exit(EXIT_FAILURE);
-        } else { // Parent process
-            // Close write end of the pipe
-            do {
-            waitpid(pid, &status, WUNTRACED);
-           } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-
-
-            time_t end_time;
+        } else {
+            // PARENT
+            int status;
+            waitpid(pid, &status, 0);
             time(&end_time);
-            double difference = difftime(end_time, start_time);
-            fprintf(termination, "%.3f    \n", (double)difference);
-            fclose(termination);
+            if (end_time < start_time) end_time = start_time;
+            log_termination(pid, cmds[i], start_time, end_time);
+
             close(pipefd[1]);
-            
-            // Close the previous pipe's read end
-            if (prev_pipe_read != -1) {
-                close(prev_pipe_read);
-            }
-
-            // Set the previous pipe's read end to the current pipe's read end
-            prev_pipe_read = pipefd[0];
-
+            if (prev_fd != -1) close(prev_fd);
+            prev_fd = pipefd[0];
         }
     }
-
-    // Read and print the output of the last command in the pipeline
-    char output_buffer[1024]; // Adjust the buffer size as needed
-    ssize_t num_bytes;
-
-    while ((num_bytes = read(prev_pipe_read, output_buffer, sizeof(output_buffer))) > 0) {
-        write(STDOUT_FILENO, output_buffer, num_bytes);
-    }
-
-    // Wait for the last child process to finish
-    wait(NULL);
 }
 
-//checks if there is an & in the command
-bool isAnded(char* command)
-{
-    if(strchr(command,'&')!= NULL){
-        return true;
+
+void exec_background(char* input){
+    char* cmds[10];
+    int count = 0;
+    char* token = strtok(input, "&");
+    while (token && count < 10) {
+        cmds[count++] = token;
+        token = strtok(NULL, "&");
     }
-    else return false;
+
+    for (int i = 0; i < count; i++) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            exec_command(cmds[i]);
+            exit(0);
+        }
+    }
 }
 
-void exec_anded(char* command)
-{
-    char* args[100];
-    int i = 0;
-    //for loop for execution
-    char* token = strtok(command, "&");
-    while(token != NULL)
-    {
-        args[i] = token;
-        i++;
-        
-        exec_command(token);
-        token = strtok(NULL,"&");
+void view_history() {
+    FILE* file = fopen("history.txt", "r");
+    if (!file) {
+        perror("history file");
+        return;
     }
 
-}
-
-void view_history(){
-    FILE *file = fopen("history.txt", "r");
-
-    if (file == NULL) {
-        perror("Error opening the file");
-        exit(1);
-    }
-
-    // Read and print each line from the file
-    char line[MAX_INPUT_SIZE]; // Adjust the buffer size as needed
-    while (fgets(line, sizeof(line), file) != NULL) {
+    char line[MAX_INPUT_SIZE];
+    while (fgets(line, sizeof(line), file)) {
         printf("%s", line);
     }
-
-    // Close the file
     fclose(file);
 }
 
-
-void view_termination(){
-    
-    FILE *file = fopen("termination.txt", "r");
-    printf("%s","");
-    if (file == NULL) {
-        perror("Error opening the file");
-        exit(1);
-    }
-
-    // Read and print each line from the file
-    char line[MAX_INPUT_SIZE]; // Adjust the buffer size as needed
-    while (fgets(line, sizeof(line), file) != NULL) {
-        printf("%s", line);
-    }
-
-    // Close the file
-    fclose(file);
-    
-}
-
-//custom handler for ctrl C
-void my_handler(int signum){
-    if (signum== SIGINT){
-        printf("Terminating. Ctrl C called.");
-        view_termination();
-        exit(EXIT_SUCCESS);
-
+void write_to_history(const char* input, int cmd_num) {
+    FILE* file = fopen("history.txt", "a");
+    if (file) {
+        fprintf(file, "%d. %s\n", cmd_num, input);
+        fclose(file);
     }
 }
 
-int main()
-{   
-    int pc=0;
-    
+void init_files() {
+    FILE* hist = fopen("history.txt", "w");
+    if (hist) {
+        fprintf(hist, "COMMAND HISTORY\n----------------\n");
+        fclose(hist);
+    }
+
+    FILE* term = fopen("termination.txt", "w");
+    if (term) {
+        fprintf(term, "PROCESS TERMINATION LOG\n------------------------\n");
+        fclose(term);
+    }
+}
+
+int main() {
     struct sigaction sa;
-    memset(&sa,0,sizeof(sa));
+    memset(&sa, 0, sizeof(sa));
     sa.sa_handler = my_handler;
-    if (sigaction(SIGINT, &sa, NULL)==-1){
-        perror ("sigaction");
-        return 1;
-    }
+    sigaction(SIGINT, &sa, NULL);
 
-    
-    FILE *history= fopen("history.txt", "w");
-    fprintf(history, "%s","NO.      Command\n \n");
-    fclose(history);
-    
-    FILE *termination= fopen("termination.txt", "w");
-    fprintf(termination, "%s", "PID      Command          Start Time      Duration:\n\n");
-    fclose(termination);
+    init_files();
+
     char input[MAX_INPUT_SIZE];
-    while(1){
-       if (is_interrupted) {
-            // Ctrl+C was pressed; continue to the next iteration
+    int cmd_count = 0;
+
+    while (1) {
+        printf("SimpleShell$ ");
+        fflush(stdout);
+        clearerr(stdin);
+        // if (!fgets(input, sizeof(input), stdin)) continue;
+        if (!fgets(input, sizeof(input), stdin)) {
+            clearerr(stdin);  // Fixes rare double input edge cases
             continue;
         }
 
-        printf("Group-48SimpleShell$ ");
-        fgets(input,MAX_INPUT_SIZE,stdin);
-        input[strlen(input)-1] = '\0';
-        pc++;
-        //opening history file
-        FILE *history= fopen("history.txt", "a");
-        fprintf(history, "%d.    ", pc);
-        fprintf(history, "%s    \n", input);
-        fclose(history);
-        if(strcmp(input,"history") == 0){
-            view_history();
-        }
-       
-        else{
-            //checking for exit command
-            if(strcmp(input,"exit") == 0){
-                printf("Exiting....\n");
-                view_termination();
-                break;
-            }
+        size_t len = strlen(input);
+        if (len == 0 || (len == 1 && input[0] == '\n')) continue;
+        input[len - 1] = '\0';  // remove newline
 
-            if(isPiped(input) == true){
-                exec_piped(input);
-            }
-            else if(isAnded(input) == true){
-                exec_anded(input);
-            }
-            else {
-                
-                exec_command(input);
-            }
-            
+        if (strcmp(input, "exit") == 0) {
+            printf("Exiting shell...\n");
+            my_handler(SIGINT);
         }
+
+        cmd_count++;
+        write_to_history(input, cmd_count);
+
+        if (strcmp(input, "history") == 0) {
+            view_history();
+            continue;
+        }
+
+        // support builtin cd
+        if (strncmp(input, "cd ", 3) == 0) {
+            char* path = input + 3;
+            if (chdir(path) != 0) {
+                perror("cd failed");
+            }
+            continue;
+        }
+
+        if (is_piped(input)) {
+            exec_piped(input);
+        } else if (is_background(input)) {
+            exec_background(input);
+        } else {
+            exec_command(input);
+        }
+        
     }
-    
+
     return 0;
 }

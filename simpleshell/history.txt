@@ -1,3 +1,10 @@
-NO.      Command
- 
-1.    ls    
+COMMAND HISTORY
+----------------
+1. ls
+2. wc -l SimpleShell.c
+3. cat SimpleShell.c | grep printf
+4. ./fib 10
+5. sleep 3 &
+6. echo hello world
+7. sort SimpleShell.c | uniq
+8. history
